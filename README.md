@@ -16,7 +16,6 @@ A Retrieval-Augmented Generation (RAG) system that answers plain-language questi
      course descriptions don't reflect teaching style, exam difficulty, or workload." -->
 This system covers the lived reality of SBU on-campus housing, mold, pests, noise, natural light, odors, and the practical question of what to do when something goes wrong. This knowledge is valuable because the university does not officially disclose these problems; nothing in the housing portal will tell you which dorm has black mold or which building is known for bugs. Students learn it only from each other, scattered across reviews and forum threads, which makes it hard to find and easy to miss when choosing where to live.
 
-
 ---
 
 ## Document Sources
@@ -176,6 +175,7 @@ Evaluation: The system correctly declined to answer, since no document in the co
 | 5 | Which dorms have bug problems, and what can I do about them? | Keller, Yang/Roosevelt; fixes include work orders, traps, exterminator | Named Yang, Keller, and Roosevelt; suggested exterminator, reporting to management, staying out of the dorm | Relevant | Accurate |
 
 **Retrieval quality:** Relevant / Partially relevant / Off-target
+
 **Response accuracy:** Accurate / Partially accurate / Inaccurate
 
 Four of five questions returned accurate, well-grounded answers. Question 1 was only partially accurate, which is analyzed below.
@@ -199,7 +199,7 @@ Four of five questions returned accurate, well-grounded answers. Question 1 was 
 
 **What the system returned:** It named West C Apartments correctly but referred to the Kelly source as "another dorm (unnamed)," even though that document is titled "Kelly Quad," and it omitted Hendrix's carpet mold entirely. The expected answer was Kelly, West C, and Hendrix.
 
-**Root cause (tied to a specific pipeline stage):** This is a chunking-and-retrieval failure, not a generation failure. First, chunk boundaries split the building name from the problem: in the Hendrix document, the name "Hendrix" sits in chunk 3 while the mold mention ("Only con is the mold problem on the carpets") sits in chunk 4, so any chunk carrying the mold fact may not carry the dorm name. The same pattern affected Kelly, where the retrieved chunk contained the mold description without the clearly attached building name. Second, the corpus is small — only 21 chunks — and with top-k set to 4, retrieval surfaced the two strongest mold signals (Kelly and West C) but never pulled the Hendrix mold chunk into the context window, so the model had no way to mention it.
+**Root cause (tied to a specific pipeline stage):** This is a chunking-and-retrieval failure, not a generation failure. First, chunk boundaries split the building name from the problem: in the Hendrix document, the name "Hendrix" sits in chunk 3 while the mold mention ("Only con is the mold problem on the carpets") sits in chunk 4, so any chunk carrying the mold fact may not carry the dorm name. The same pattern affected Kelly, where the retrieved chunk contained the mold description without the clearly attached building name. Second, the corpus is small, only 21 chunks, and with top-k set to 4, retrieval surfaced the two strongest mold signals (Kelly and West C) but never pulled the Hendrix mold chunk into the context window, so the model had no way to mention it.
 
 **What you would change to fix it:** I would switch to a sentence-aware splitter that keeps each dorm's name attached to its associated facts within the same chunk, and I would either raise top-k or store the dorm name as metadata on every chunk so it is always available for attribution regardless of where the boundary falls.
 
@@ -210,7 +210,7 @@ Four of five questions returned accurate, well-grounded answers. Question 1 was 
 <!-- Reflect on how planning.md shaped your implementation.
      Answer both questions with at least 2–3 sentences each. -->
 
-**One way the spec helped you during implementation:** Writing the chunking and retrieval sections of planning.md before any code meant I could hand an AI tool a precise specification — chunk size, overlap, top-k, and embedding model — rather than a vague request. The generated pipeline matched my intended design closely because the spec told it exactly what to build, which saved time I would otherwise have spent correcting generic code.
+**One way the spec helped you during implementation:** Writing the chunking and retrieval sections of planning.md before any code meant I could hand an AI tool a precise specification, chunk size, overlap, top-k, and embedding model, rather than a vague request. The generated pipeline matched my intended design closely because the spec told it exactly what to build, which saved time I would otherwise have spent correcting generic code.
 
 **One way your implementation diverged from the spec, and why:** I planned for a corpus of many small chunks, but because my source documents were so short, the pipeline produced only 21 chunks, with several documents staying nearly whole. This meant retrieval often pulled entire documents rather than targeted passages, and the character-based overlap occasionally cut mid-sentence. This divergence directly contributed to the Question 1 failure, and it is something I would address by collecting longer documents or refining the splitter.
 
@@ -229,7 +229,7 @@ Four of five questions returned accurate, well-grounded answers. Question 1 was 
 
 **Instance 1**
 
-- *What I gave the AI:* My planning.md chunking and retrieval sections, plus my architecture diagram, with a request to generate the full pipeline — ingestion, chunking, embedding, ChromaDB storage, retrieval, generation, and the Gradio interface.
+- *What I gave the AI:* My planning.md chunking and retrieval sections, plus my architecture diagram, with a request to generate the full pipeline, ingestion, chunking, embedding, ChromaDB storage, retrieval, generation, and the Gradio interface.
 - *What it produced:* Four working files, but the first version used outdated ChromaDB APIs (`chroma_db_impl="duckdb+parquet"` and `client.persist()`) and called a non-existent Groq "responses" endpoint with custom response-parsing logic.
 - *What I changed or overrode:* I tested each file rather than trusting the output, found both bugs at runtime, and replaced them with the current ChromaDB `PersistentClient` API and Groq's standard `chat.completions.create` call. I verified the fix by running the pipeline end to end until it returned a correctly grounded answer with sources.
 
@@ -237,4 +237,4 @@ Four of five questions returned accurate, well-grounded answers. Question 1 was 
 
 - *What I gave the AI:* Rough ideas for evaluation questions and my list of 10 documents, asking it to help turn them into specific, verifiable test questions.
 - *What it produced:* A set of candidate questions with suggested expected answers mapped to my documents.
-- *What I changed or overrode:* I reviewed each against my actual corpus and kept only those with clear ground-truth answers. I deliberately retained Question 4 (seasonal West C mold) as a nuance test and Question 1 (mold across multiple documents) because I anticipated it might expose a retrieval weakness — directing which questions to keep rather than accepting the full set.
+- *What I changed or overrode:* I reviewed each against my actual corpus and kept only those with clear ground-truth answers. I deliberately retained Question 4 (seasonal West C mold) as a nuance test and Question 1 (mold across multiple documents) because I anticipated it might expose a retrieval weakness, directing which questions to keep rather than accepting the full set.
